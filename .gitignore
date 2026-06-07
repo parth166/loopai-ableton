@@ -1,0 +1,59 @@
+# ─── Secrets / env ────────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+
+# ─── Node / TypeScript ────────────────────────────────────────────────
+node_modules/
+dist/
+*.tsbuildinfo
+.tsx-cache/
+
+# ─── Python ───────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+env/
+.python-version
+
+# ─── Vendored upstream deps (cloned separately, see README) ───────────
+magenta-realtime/
+stable-audio-3/
+extensions-sdk-1.0.0-beta.0/
+
+# ─── Generated audio / model caches ───────────────────────────────────
+out/
+outputs/
+generated_clips/
+*.wav
+*.flac
+*.mp3
+*.aiff
+*.m4a
+!src/**/*.wav
+*.ckpt
+*.safetensors
+*.bin
+*.onnx
+
+# ─── Hackathon docs / personal notes ──────────────────────────────────
+*.pdf
+
+# ─── IDE / OS junk ────────────────────────────────────────────────────
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+Thumbs.db
+
+# ─── Logs ─────────────────────────────────────────────────────────────
+*.log
+logs/

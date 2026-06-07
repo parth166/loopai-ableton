@@ -1,0 +1,1165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Track Generator</title>
+<style>
+*, *::before, *::after { box-sizing: border-box; }
+*:not(dialog) { margin: 0; }
+input, button, textarea, select { font: inherit; }
+
+:root {
+  --p-live-ui-bg: hsl(0, 0%, 19%);
+  --p-live-control-bg: hsl(0, 0%, 14%);
+  --p-live-input-bg: hsl(0, 0%, 11%);
+  --p-live-text-primary: hsl(0, 0%, 80%);
+  --p-live-control-border: hsl(0, 0%, 6%);
+  --p-live-text-secondary: hsl(0, 0%, 45%);
+  --p-live-accent-primary: hsl(31, 100%, 67%);
+  --p-live-accent-secondary: hsl(168, 84%, 60%);
+  --p-sa3-accent: hsl(265, 80%, 70%);
+  --p-live-control-text--enabled: hsl(0, 0%, 7%);
+
+  --c-bg: var(--p-live-ui-bg);
+  --c-text-primary: var(--p-live-text-primary);
+  --c-text-secondary: var(--p-live-text-secondary);
+  --c-control-bg: var(--p-live-control-bg);
+  --c-control-bg-hover: hsl(0, 0%, 18%);
+  --c-control-border: var(--p-live-control-border);
+  --c-input-bg: var(--p-live-input-bg);
+  --c-accent: var(--p-live-accent-primary);
+  --c-accent2: var(--p-live-accent-secondary);
+  --c-on-accent: var(--p-live-control-text--enabled);
+}
+body[data-engine="magenta"] { --c-accent: var(--p-live-accent-primary); }
+body[data-engine="sa3"]     { --c-accent: var(--p-sa3-accent); }
+
+html, body {
+  height: 100%;
+  background: var(--c-bg);
+  color: var(--c-text-primary);
+  font-family: "AbletonSansSmall", "Inter", system-ui, -apple-system, sans-serif;
+  font-size: 12px;
+  font-weight: 500;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px 8px 16px;
+  border-bottom: 1px solid var(--c-control-border);
+  background: var(--c-control-bg);
+  flex-shrink: 0;
+}
+.topbar h1 {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--c-text-primary);
+}
+.topbar .status {
+  font-size: 10.5px;
+  color: var(--c-text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  margin-right: 6px;
+  white-space: nowrap;
+}
+.status .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--c-text-secondary);
+  transition: background 0.2s;
+}
+.status.ok .dot { background: var(--c-accent2); }
+.status.err .dot { background: #ff5a5a; }
+.status.busy .dot { background: var(--c-accent); animation: pulse 1s ease-in-out infinite; }
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.close-btn {
+  background: transparent;
+  border: 1px solid var(--c-control-border);
+  color: var(--c-text-secondary);
+  width: 24px; height: 24px;
+  border-radius: 12px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1;
+}
+.close-btn:hover {
+  color: var(--c-text-primary);
+  border-color: var(--c-text-secondary);
+}
+
+.engine-tabs {
+  display: flex;
+  gap: 0;
+  background: var(--c-input-bg);
+  border: 1px solid var(--c-control-border);
+  border-radius: 14px;
+  padding: 2px;
+}
+.engine-tabs button {
+  background: transparent;
+  border: none;
+  color: var(--c-text-secondary);
+  padding: 4px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+  border-radius: 11px;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.engine-tabs button:hover { color: var(--c-text-primary); }
+.engine-tabs button.active {
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+}
+.engine-tabs button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 16px 16px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.scroll::-webkit-scrollbar { width: 8px; }
+.scroll::-webkit-scrollbar-track { background: transparent; }
+.scroll::-webkit-scrollbar-thumb {
+  background: var(--c-control-border);
+  border-radius: 4px;
+}
+.scroll::-webkit-scrollbar-thumb:hover { background: var(--c-text-secondary); }
+
+label.field { display: flex; flex-direction: column; gap: 4px; }
+label.field > .label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  color: var(--c-text-secondary);
+  font-size: 10.5px;
+  letter-spacing: 0.4px;
+  text-transform: uppercase;
+}
+label.field > .label-row .value {
+  color: var(--c-text-primary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+textarea, input[type="text"], select {
+  background: var(--c-input-bg);
+  color: var(--c-text-primary);
+  border: 1px solid var(--c-control-border);
+  padding: 6px 8px;
+  width: 100%;
+  resize: none;
+  outline: none;
+  border-radius: 2px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+textarea:focus, input[type="text"]:focus, select:focus {
+  border-color: var(--c-text-secondary);
+}
+
+input[type="range"] {
+  -webkit-appearance: none;
+  appearance: none;
+  background: transparent;
+  width: 100%;
+  height: 14px;
+  margin: 0;
+}
+input[type="range"]::-webkit-slider-runnable-track {
+  height: 3px;
+  background: var(--c-control-border);
+  border-radius: 2px;
+}
+input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 12px; height: 12px;
+  border-radius: 50%;
+  background: var(--c-accent);
+  margin-top: -4.5px;
+  cursor: grab;
+  border: none;
+}
+
+.preset-row { display: flex; gap: 6px; flex-wrap: wrap; }
+.preset-row button {
+  background: transparent;
+  border: 1px solid var(--c-control-border);
+  color: var(--c-text-secondary);
+  padding: 3px 9px;
+  font-size: 10.5px;
+  border-radius: 10px;
+  cursor: pointer;
+}
+.preset-row button:hover {
+  color: var(--c-text-primary);
+  border-color: var(--c-text-secondary);
+}
+
+.selection-info {
+  font-size: 10.5px;
+  color: var(--c-text-secondary);
+  letter-spacing: 0.3px;
+}
+.selection-info b { color: var(--c-text-primary); font-weight: 600; }
+
+/* ─── 2D exploration pad ─── */
+.pad-section h2 {
+  font-size: 10.5px;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  color: var(--c-text-secondary);
+  margin-bottom: 6px;
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+}
+.pad-section h2 .hint {
+  font-size: 9.5px;
+  color: var(--c-text-secondary);
+  text-transform: none;
+  letter-spacing: 0.3px;
+}
+
+.pad-wrap {
+  display: grid;
+  grid-template-columns: 22px 1fr;
+  grid-template-rows: 1fr 22px;
+  gap: 4px;
+}
+.pad-y {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: flex-end;
+  padding: 4px 0;
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--c-text-secondary);
+  white-space: nowrap;
+}
+.pad {
+  position: relative;
+  background:
+    radial-gradient(ellipse 70% 60% at 30% 30%, rgba(255,180,80,0.06) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 75% 75%, rgba(80,255,200,0.04) 0%, transparent 60%),
+    var(--c-input-bg);
+  border: 1px solid var(--c-control-border);
+  border-radius: 8px;
+  height: 240px;
+  cursor: crosshair;
+  overflow: hidden;
+}
+body[data-engine="sa3"] .pad {
+  background:
+    radial-gradient(ellipse 70% 60% at 30% 30%, rgba(180,120,255,0.06) 0%, transparent 70%),
+    radial-gradient(ellipse 50% 40% at 75% 75%, rgba(120,200,255,0.04) 0%, transparent 60%),
+    var(--c-input-bg);
+}
+.pad .gridline {
+  position: absolute;
+  background: rgba(255,255,255,0.04);
+}
+.pad .gh { width: 100%; height: 1px; top: 50%; left: 0; }
+.pad .gv { height: 100%; width: 1px; left: 50%; top: 0; }
+
+.pad .ghost {
+  position: absolute;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  border: 1px dashed var(--c-text-secondary);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  display: none;
+}
+
+.dot {
+  position: absolute;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--c-on-accent);
+  border: 1.5px solid transparent;
+  transition: transform 0.12s, box-shadow 0.12s;
+  z-index: 2;
+}
+.dot:hover {
+  transform: translate(-50%, -50%) scale(1.15);
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.06);
+}
+.dot.sel {
+  border-color: rgba(255,255,255,0.85);
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.12), 0 0 18px rgba(255,255,255,0.05);
+  transform: translate(-50%, -50%) scale(1.18);
+}
+.dot.busy {
+  animation: dotpulse 1s ease-in-out infinite;
+}
+.dot.multi::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  border: 2px solid var(--c-accent2);
+  pointer-events: none;
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.35);
+}
+.dot.multi.sel::after {
+  border-color: #ffffff;
+}
+
+.props-banner {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 10.5px;
+  color: var(--c-text-secondary);
+  letter-spacing: 0.2px;
+}
+.props-banner .chip {
+  background: var(--c-input-bg);
+  border: 1px solid var(--c-control-border);
+  padding: 2px 8px;
+  border-radius: 8px;
+  color: var(--c-text-primary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+.props-banner .chip.muted {
+  color: var(--c-text-secondary);
+  font-weight: 500;
+}
+@keyframes dotpulse {
+  0%,100% { opacity: 0.55; }
+  50%     { opacity: 1; }
+}
+
+.pad-x {
+  grid-column: 2;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 9px;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--c-text-secondary);
+  padding: 0 2px;
+}
+
+.pad-readout {
+  display: flex;
+  gap: 12px;
+  padding: 6px 8px;
+  background: var(--c-input-bg);
+  border: 1px solid var(--c-control-border);
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--c-text-secondary);
+  align-items: center;
+}
+.pad-readout .pill {
+  background: var(--c-control-bg);
+  border: 1px solid var(--c-control-border);
+  padding: 2px 8px;
+  border-radius: 8px;
+  color: var(--c-text-primary);
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  background: var(--c-input-bg);
+  border: 1px solid var(--c-control-border);
+  border-radius: 4px;
+  min-height: 44px;
+}
+.preview audio { flex: 1; height: 28px; }
+audio::-webkit-media-controls-panel { background-color: var(--c-input-bg); }
+.preview .meta {
+  flex: 1;
+  color: var(--c-text-secondary);
+  font-size: 11px;
+  font-style: italic;
+}
+.preview.empty audio { display: none; }
+
+.err-msg {
+  font-size: 11px;
+  color: #ff7b7b;
+  padding: 6px 8px;
+  background: rgba(255, 90, 90, 0.08);
+  border: 1px solid rgba(255, 90, 90, 0.3);
+  border-radius: 3px;
+  display: none;
+}
+.err-msg.show { display: block; }
+
+.audio-badge {
+  display: inline-block;
+  font-size: 10px;
+  padding: 1px 7px;
+  border-radius: 8px;
+  background: rgba(100, 220, 180, 0.15);
+  border: 1px solid rgba(100, 220, 180, 0.35);
+  color: var(--c-accent2);
+  vertical-align: middle;
+  margin-left: 4px;
+}
+.audio-badge.text-only {
+  background: transparent;
+  border-color: var(--c-control-border);
+  color: var(--c-text-secondary);
+}
+
+.footer {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 10px 16px;
+  border-top: 1px solid var(--c-control-border);
+  background: var(--c-control-bg);
+  flex-shrink: 0;
+}
+.footer .spacer { flex: 1; }
+
+button.btn {
+  background: var(--c-control-bg);
+  color: var(--c-text-primary);
+  border: 1px solid var(--c-control-border);
+  padding: 6px 14px;
+  height: 26px;
+  border-radius: 13px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  user-select: none;
+  white-space: nowrap;
+  transition: background 0.1s, color 0.1s, border-color 0.1s;
+}
+button.btn:hover { background: var(--c-control-bg-hover); }
+button.btn:active { background: var(--c-accent); color: var(--c-on-accent); }
+button.btn:disabled { opacity: 0.4; cursor: not-allowed; }
+button.btn.primary {
+  background: var(--c-accent);
+  color: var(--c-on-accent);
+  border-color: var(--c-accent);
+}
+button.btn.primary:hover { filter: brightness(1.1); }
+button.btn.primary:disabled {
+  background: var(--c-control-bg);
+  color: var(--c-text-secondary);
+  border-color: var(--c-control-border);
+}
+button.btn.accent2 {
+  background: var(--c-accent2);
+  color: var(--c-on-accent);
+  border-color: var(--c-accent2);
+}
+button.btn.accent2:disabled {
+  background: var(--c-control-bg);
+  color: var(--c-text-secondary);
+  border-color: var(--c-control-border);
+}
+
+.engine-pane { display: none; flex-direction: column; gap: 10px; }
+body[data-engine="magenta"] .engine-pane.magenta { display: flex; }
+body[data-engine="sa3"]     .engine-pane.sa3     { display: flex; }
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1 id="title">Track Generator</h1>
+  <div class="engine-tabs" role="tablist">
+    <button id="tab-magenta" class="active" data-engine="magenta">Magenta</button>
+    <button id="tab-sa3" data-engine="sa3" title="Stable Audio 3">Stable Audio 3</button>
+  </div>
+  <div id="status" class="status"><span class="dot"></span><span id="status-text">connecting...</span></div>
+  <button class="close-btn" id="close-btn" title="Close (Esc)">×</button>
+</div>
+
+<div class="scroll" id="scroll">
+  <div class="selection-info" id="selection-info"></div>
+  <div class="props-banner" id="props-banner"></div>
+
+  <label class="field">
+    <div class="label-row"><span>Base prompt</span></div>
+    <textarea id="prompt" rows="2" placeholder="e.g. driving techno, 124 BPM, dub chords, late-night vibe"></textarea>
+    <div class="preset-row">
+      <button data-preset="minimal techno, 124 BPM, four-on-the-floor, deep dub chords">techno</button>
+      <button data-preset="lo-fi hip hop, dusty drums, mellow rhodes, vinyl crackle">lo-fi</button>
+      <button data-preset="ambient pads, warm analog synths, slow evolving textures">ambient</button>
+      <button data-preset="drum and bass, 174 BPM, breakbeat, sub bass, atmospheric">dnb</button>
+      <button data-preset="jazz piano trio, walking bass, brushed drums, swing">jazz</button>
+    </div>
+  </label>
+
+  <!-- Engine-specific knobs (duration, fixed model params) -->
+  <div class="engine-pane magenta">
+    <label class="field">
+      <div class="label-row"><span>Duration</span><span class="value"><span id="m-seconds-val">4.0</span>s</span></div>
+      <input type="range" id="m-seconds" min="1" max="10" step="0.5" value="4">
+    </label>
+  </div>
+  <div class="engine-pane sa3">
+    <label class="field">
+      <div class="label-row"><span>Duration</span><span class="value"><span id="sa3-duration-val">8.0</span>s</span></div>
+      <input type="range" id="sa3-duration" min="2" max="60" step="1" value="8">
+    </label>
+    <label class="field">
+      <div class="label-row"><span>Diffusion steps</span><span class="value" id="sa3-steps-val">8</span></div>
+      <input type="range" id="sa3-steps" min="4" max="100" step="1" value="8">
+    </label>
+  </div>
+
+  <!-- ─── 2D exploration pad ─── -->
+  <div class="pad-section">
+    <h2>
+      <span>Exploration map</span>
+      <span class="hint">click to generate · click a dot to preview · shift-click dots to batch-insert</span>
+    </h2>
+    <div class="pad-wrap">
+      <div class="pad-y">
+        <span>chaotic</span>
+        <span>strict</span>
+      </div>
+      <div class="pad" id="pad">
+        <div class="gridline gh"></div>
+        <div class="gridline gv"></div>
+        <div class="ghost" id="ghost"></div>
+        <div id="dots"></div>
+      </div>
+      <div></div>
+      <div class="pad-x">
+        <span>← simple</span>
+        <span>complex →</span>
+      </div>
+    </div>
+    <div class="pad-readout" style="margin-top:8px">
+      <span>Cursor:</span>
+      <span class="pill" id="readout-x">complexity 0.50</span>
+      <span class="pill" id="readout-y" data-engine-knob="">creativity 0.50</span>
+      <span style="flex:1; text-align:right; font-size:10.5px; opacity:.75">
+        <span id="dot-count">0</span> dots
+      </span>
+    </div>
+  </div>
+
+  <div id="err" class="err-msg"></div>
+
+  <div class="preview empty" id="preview">
+    <span class="meta" id="preview-meta">No clip yet — click on the pad to generate one.</span>
+    <audio id="player" controls preload="none"></audio>
+  </div>
+</div>
+
+<div class="footer">
+  <button class="btn" id="reset-state-btn" title="Reset Magenta's autoregressive state">Reset State</button>
+  <button class="btn" id="clear-dots-btn" title="Remove all dots from the pad">Clear Map</button>
+  <button class="btn" id="recommend-btn" title="Place 4 dots at the centers of each quadrant and generate">AI x4</button>
+  <div class="spacer"></div>
+  <button class="btn" id="cancel-btn">Cancel</button>
+  <button class="btn primary" id="regen-btn" disabled>Regenerate</button>
+  <button class="btn accent2" id="insert-btn" disabled>Insert into New Track</button>
+  <button class="btn accent2" id="insert-multi-btn" disabled title="Shift-click dots to add to the batch, then insert all">Insert 0 selected</button>
+</div>
+<script>
+// ─── Live ↔ webview bridge ─────────────────────────────────────────────
+const isWebKit = !!(window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.live);
+const isWebView2 = !!(window.chrome && window.chrome.webview);
+
+function sendToHost(message) {
+  if (isWebKit) window.webkit.messageHandlers.live.postMessage(message);
+  else if (isWebView2) window.chrome.webview.postMessage(message);
+}
+function closeWithResult(result) {
+  sendToHost({ method: "close_and_send", params: [JSON.stringify(result)] });
+}
+
+// ─── Selection info from URL hash ──────────────────────────────────────
+function readSelectionFromHash() {
+  try {
+    const raw = decodeURIComponent(location.hash.replace(/^#/, ""));
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch (_) { return null; }
+}
+
+const $ = (id) => document.getElementById(id);
+const selection = readSelectionFromHash();
+let audioConditioningPath = null;
+const songProps = (selection && selection.songProps) || null;
+
+// Render the project's musical context (BPM, key, time signature) into a row
+// of chips so the user can confirm what we'll splice into the SA3 prompt.
+function keyDescription(props) {
+  if (!props) return null;
+  const root = props.rootName || (typeof props.rootNote === "number"
+    ? ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"][props.rootNote] : null);
+  if (!root) return null;
+  const scale = (props.scaleName || "").trim();
+  return scale ? `${root} ${scale}` : root;
+}
+function renderPropsBanner() {
+  const el = $("props-banner");
+  if (!songProps) { el.innerHTML = ""; return; }
+  const chips = [];
+  if (songProps.bpm) chips.push(`<span class="chip">${Math.round(songProps.bpm)} BPM</span>`);
+  const keyDesc = keyDescription(songProps);
+  if (keyDesc) {
+    const cls = songProps.scaleMode ? "chip" : "chip muted";
+    const tip = songProps.scaleMode ? "scale mode active in Live" : "global scale (mode not active)";
+    chips.push(`<span class="${cls}" title="${tip}">${keyDesc}</span>`);
+  }
+  if (songProps.timeSignature) chips.push(`<span class="chip muted">${songProps.timeSignature}</span>`);
+  if (chips.length) {
+    chips.unshift(`<span style="opacity:.7">project:</span>`);
+    chips.push(`<span style="opacity:.55">forwarded to Stable Audio 3 prompts</span>`);
+  }
+  el.innerHTML = chips.join(" ");
+}
+
+{
+  const selInfoEl = $("selection-info");
+  if (selection) {
+    const dur = selection.end - selection.start;
+    const audioTag = selection.renderedAudioPath
+      ? `<span class="audio-badge" title="${selection.renderedAudioPath}">audio conditioning active</span>`
+      : `<span class="audio-badge text-only">text only</span>`;
+    selInfoEl.innerHTML =
+      `<b>${selection.trackName ?? "track"}</b> &middot; beat ${selection.start.toFixed(2)} &rarr; ${selection.end.toFixed(2)} <span style="opacity:.6">(&Delta; ${dur.toFixed(2)} beats)</span> ${audioTag}`;
+    audioConditioningPath = selection.renderedAudioPath ?? null;
+  } else {
+    selInfoEl.textContent = "";
+  }
+  renderPropsBanner();
+}
+
+// Build a sentence we can append to SA3 prompts so the model honors the
+// project's musical context. Returns "" when there's nothing useful to add.
+function songConstraintSuffix() {
+  if (!songProps) return "";
+  const parts = [];
+  if (songProps.bpm) parts.push(`${Math.round(songProps.bpm)} BPM`);
+  const keyDesc = keyDescription(songProps);
+  if (keyDesc) parts.push(`in ${keyDesc}`);
+  if (!parts.length) return "";
+  return `, ${parts.join(", ")}; do not change tempo or key`;
+}
+
+// ─── Engine state + tab handling ───────────────────────────────────────
+const BACKEND = "http://127.0.0.1:8765";
+let currentEngine = "magenta";
+let backendHealth = null;
+
+const ENGINE_LABEL = {
+  magenta: "Magenta",
+  sa3:     "Stable Audio 3",
+};
+
+// Map pad Y (0..1, top->bottom) to the engine's "creativity" knob.
+//   y = 0 (top)    → "chaotic" / loose
+//   y = 1 (bottom) → "strict"  / faithful to prompt
+const ENGINE_Y_RANGE = {
+  // Magenta: top y=0 -> high temperature (chaotic), bottom y=1 -> low temp (rigid).
+  magenta: { label: "temperature", min: 1.6, max: 0.5, decimals: 2 },
+  // SA3: top y=0 -> low cfg_scale (creative), bottom y=1 -> high cfg_scale (strict).
+  sa3:     { label: "cfg_scale",   min: 0.5, max: 5.0, decimals: 2 },
+};
+function knobAt(y, engine) {
+  const r = ENGINE_Y_RANGE[engine];
+  return r.min + (r.max - r.min) * y;
+}
+
+// Per-engine accent palette for dots (so each engine's dots look distinct).
+const ENGINE_PALETTES = {
+  magenta: ["#ff9c4c", "#ffc266", "#ffd28c", "#ffb070", "#e88a3a", "#ffae5e"],
+  sa3:     ["#b48aff", "#9c66ff", "#7a8aff", "#a96bff", "#cb9bff", "#8470ff"],
+};
+function colorFor(engine, idx) {
+  const palette = ENGINE_PALETTES[engine] || ENGINE_PALETTES.magenta;
+  return palette[idx % palette.length];
+}
+
+function setEngine(engine) {
+  if (currentEngine === engine) return;
+  currentEngine = engine;
+  document.body.dataset.engine = engine;
+  $("tab-magenta").classList.toggle("active", engine === "magenta");
+  $("tab-sa3").classList.toggle("active", engine === "sa3");
+  $("title").textContent = `${ENGINE_LABEL[engine]} · Track Generator`;
+  $("reset-state-btn").style.display = engine === "magenta" ? "" : "none";
+  syncReadoutPills();
+  refreshStatus();
+}
+
+// ─── Status / errors ───────────────────────────────────────────────────
+function setStatus(state, text) {
+  const el = $("status");
+  el.classList.remove("ok", "err", "busy");
+  if (state) el.classList.add(state);
+  $("status-text").textContent = text;
+}
+function showError(msg) {
+  const e = $("err");
+  e.textContent = msg;
+  e.classList.add("show");
+}
+function clearError() { $("err").classList.remove("show"); }
+
+function refreshStatus() {
+  if (!backendHealth) {
+    setStatus("err", `backend offline (${BACKEND})`);
+    $("tab-sa3").disabled = true;
+    return;
+  }
+  const eng = backendHealth.engines || {};
+  const m   = eng.magenta || {};
+  const sa3 = eng.sa3     || {};
+  $("tab-sa3").disabled = !sa3.available;
+
+  if (currentEngine === "magenta") {
+    setStatus("ok",
+      m.ready
+        ? `magenta: ${m.model} · ${m.sample_rate} Hz`
+        : "loading magenta...");
+  } else {
+    if (!sa3.available) {
+      setStatus("err", "stable audio 3 not installed");
+    } else if (!sa3.loaded) {
+      setStatus("ok", `sa3: ${sa3.model} · weights load on first generate`);
+    } else {
+      setStatus("ok", `sa3: ${sa3.model} · ${sa3.sample_rate} Hz`);
+    }
+  }
+}
+
+async function pingBackend() {
+  try {
+    const r = await fetch(`${BACKEND}/health`);
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    backendHealth = await r.json();
+  } catch (e) {
+    backendHealth = null;
+  }
+  refreshStatus();
+}
+pingBackend();
+
+// ─── Slider readouts ───────────────────────────────────────────────────
+function bindSlider(slider, valueEl, formatter) {
+  slider.addEventListener("input", () => {
+    valueEl.textContent = formatter(slider.value);
+  });
+}
+bindSlider($("m-seconds"),    $("m-seconds-val"),    v => parseFloat(v).toFixed(1));
+bindSlider($("sa3-duration"), $("sa3-duration-val"), v => parseFloat(v).toFixed(1));
+bindSlider($("sa3-steps"),    $("sa3-steps-val"),    v => parseInt(v, 10));
+
+// ─── Preset chips fill the prompt ──────────────────────────────────────
+document.querySelectorAll(".preset-row button").forEach(b => {
+  b.addEventListener("click", () => { $("prompt").value = b.dataset.preset; });
+});
+
+// ─── Tab clicks ────────────────────────────────────────────────────────
+$("tab-magenta").addEventListener("click", () => setEngine("magenta"));
+$("tab-sa3").addEventListener("click",     () => {
+  if ($("tab-sa3").disabled) return;
+  setEngine("sa3");
+});
+
+// ─── Prompt complexity mutation (X axis) ──────────────────────────────
+// At x = 0 we strip flowery modifiers and prepend "minimal" qualifiers.
+// At x = 1 we append a stack of complexity modifiers.
+const SIMPLE_TAGS = [
+  "minimal", "sparse", "single melodic line",
+  "repetitive", "uncluttered",
+];
+const COMPLEX_TAGS = [
+  "layered", "polyrhythmic", "harmonically rich",
+  "evolving textures", "dense arrangement",
+  "counter-melodies", "frequent variations",
+];
+
+function mutatePrompt(base, x) {
+  const trimmed = (base || "").trim();
+  if (!trimmed) return trimmed;
+  const cx = Math.max(0, Math.min(1, x));
+  if (Math.abs(cx - 0.5) < 0.06) return trimmed;
+  if (cx < 0.5) {
+    const n = 1 + Math.ceil((0.5 - cx) * 2 * (SIMPLE_TAGS.length - 1));
+    const tags = SIMPLE_TAGS.slice(0, n).join(", ");
+    return `${tags}: ${trimmed}`;
+  } else {
+    const n = 1 + Math.ceil((cx - 0.5) * 2 * (COMPLEX_TAGS.length - 1));
+    const tags = COMPLEX_TAGS.slice(0, n).join(", ");
+    return `${trimmed}, ${tags}`;
+  }
+}
+
+// ─── Pad: clicks, ghost cursor, drag-to-place ─────────────────────────
+const pad = $("pad");
+const ghost = $("ghost");
+const dotsLayer = $("dots");
+
+function padCoords(evt) {
+  const rect = pad.getBoundingClientRect();
+  const x = (evt.clientX - rect.left) / rect.width;
+  const y = (evt.clientY - rect.top)  / rect.height;
+  return {
+    x: Math.max(0, Math.min(1, x)),
+    y: Math.max(0, Math.min(1, y)),
+  };
+}
+
+function syncReadoutPills(coords) {
+  const c = coords || lastCursor || { x: 0.5, y: 0.5 };
+  $("readout-x").textContent = `complexity ${c.x.toFixed(2)}`;
+  const range = ENGINE_Y_RANGE[currentEngine];
+  const knob = knobAt(c.y, currentEngine);
+  $("readout-y").textContent = `${range.label} ${knob.toFixed(range.decimals)}`;
+}
+
+let lastCursor = { x: 0.5, y: 0.5 };
+pad.addEventListener("mousemove", (e) => {
+  if (e.target.classList && e.target.classList.contains("dot")) {
+    ghost.style.display = "none";
+    return;
+  }
+  const c = padCoords(e);
+  lastCursor = c;
+  ghost.style.display = "block";
+  ghost.style.left = (c.x * 100) + "%";
+  ghost.style.top  = (c.y * 100) + "%";
+  syncReadoutPills(c);
+});
+pad.addEventListener("mouseleave", () => {
+  ghost.style.display = "none";
+});
+pad.addEventListener("click", (e) => {
+  if (e.target.classList && e.target.classList.contains("dot")) return;
+  const c = padCoords(e);
+  lastCursor = c;
+  generateAtPoint(c);
+});
+
+// ─── Dot bookkeeping ──────────────────────────────────────────────────
+let dots = []; // { id, engine, x, y, prompt, knob, response, color, el, ts }
+let selectedDotId = null;
+let busyDotEl = null;
+let nextDotIdx = 0;
+
+function makeDotElement(d) {
+  const el = document.createElement("div");
+  el.className = "dot";
+  el.style.left = (d.x * 100) + "%";
+  el.style.top  = (d.y * 100) + "%";
+  el.style.background = `radial-gradient(circle at 35% 35%, ${d.color}ff, ${d.color}99)`;
+  el.textContent = String.fromCharCode(65 + (nextDotIdx % 26)) + (nextDotIdx >= 26 ? Math.floor(nextDotIdx / 26) : "");
+  nextDotIdx++;
+  el.title = "loading…";
+  el.addEventListener("click", (e) => {
+    e.stopPropagation();
+    if (e.shiftKey || e.metaKey || e.ctrlKey) {
+      toggleMulti(d.id);
+    } else {
+      selectDot(d.id);
+    }
+  });
+  return el;
+}
+
+function refreshDotCount() {
+  $("dot-count").textContent = dots.length;
+}
+
+// ─── Multi-selection (batch insert) ───────────────────────────────────
+const multiSelected = new Set(); // dot ids
+
+function refreshMultiUi() {
+  dots.forEach(x => x.el.classList.toggle("multi", multiSelected.has(x.id)));
+  const n = multiSelected.size;
+  const btn = $("insert-multi-btn");
+  btn.textContent = `Insert ${n} selected`;
+  btn.disabled = n === 0;
+}
+
+function toggleMulti(id) {
+  const d = dots.find(x => x.id === id);
+  if (!d || !d.response) return;  // can't add a still-loading dot
+  if (multiSelected.has(id)) multiSelected.delete(id);
+  else multiSelected.add(id);
+  refreshMultiUi();
+}
+
+function selectDot(id) {
+  const d = dots.find(x => x.id === id);
+  if (!d || !d.response) return;
+  selectedDotId = id;
+  dots.forEach(x => x.el.classList.toggle("sel", x.id === id));
+
+  const fname = d.response.wav_path.split("/").pop();
+  const url = `${BACKEND}/audio/${encodeURIComponent(fname)}?t=${Date.now()}`;
+  const player = $("player");
+  player.src = url;
+  player.load();
+  $("preview").classList.remove("empty");
+  $("preview-meta").textContent =
+    `${ENGINE_LABEL[d.engine]} · ${(d.response.duration_ms/1000).toFixed(1)}s · ` +
+    `complex ${d.x.toFixed(2)} · ${ENGINE_Y_RANGE[d.engine].label} ${d.knob.toFixed(2)} · ` +
+    `${d.response.elapsed_s.toFixed(2)}s wall`;
+  $("insert-btn").disabled = false;
+  $("regen-btn").disabled = false;
+}
+
+async function generateAtPoint(coords) {
+  clearError();
+  const base = $("prompt").value.trim();
+  if (!base) { showError("Enter a base prompt first."); return; }
+  if (currentEngine === "sa3" && backendHealth?.engines?.sa3 && !backendHealth.engines.sa3.available) {
+    showError("Stable Audio 3 isn't available on the backend yet.");
+    return;
+  }
+
+  const engine = currentEngine;
+  const knob = knobAt(coords.y, engine);
+  const baseMutated = mutatePrompt(base, coords.x);
+  // Stable Audio 3 obeys text directives, so we paste the project's musical
+  // context onto the prompt and tell the model not to drift off it. Magenta
+  // uses MusicCoCa style embeddings + audio conditioning, where free-text
+  // tempo/key isn't reliably honored — so we only inject for SA3.
+  const finalPrompt = engine === "sa3"
+    ? baseMutated + songConstraintSuffix()
+    : baseMutated;
+  const id = "d" + Date.now() + "_" + Math.floor(Math.random() * 1000);
+  const color = colorFor(engine, dots.length);
+
+  // Place a busy dot immediately so the user gets visual feedback.
+  const placeholder = { id, engine, x: coords.x, y: coords.y, knob, prompt: finalPrompt, response: null, color, el: null, ts: Date.now() };
+  placeholder.el = makeDotElement(placeholder);
+  placeholder.el.classList.add("busy");
+  dotsLayer.appendChild(placeholder.el);
+  dots.push(placeholder);
+  busyDotEl = placeholder.el;
+  refreshDotCount();
+  setStatus("busy", `${ENGINE_LABEL[engine]}: generating...`);
+  $("regen-btn").disabled = true;
+
+  try {
+    let resp;
+    if (engine === "magenta") {
+      const body = {
+        prompt: finalPrompt,
+        seconds: parseFloat($("m-seconds").value),
+        temperature: knob,
+        top_k: 40,
+        cfg_musiccoca: 4.0,
+        reset_state: false,
+        audio_path: audioConditioningPath || null,
+      };
+      const r = await fetch(`${BACKEND}/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+      resp = await r.json();
+    } else {
+      const body = {
+        prompt: finalPrompt,
+        duration: parseFloat($("sa3-duration").value),
+        cfg_scale: knob,
+        steps: parseInt($("sa3-steps").value, 10),
+        seed: -1,
+      };
+      const r = await fetch(`${BACKEND}/sa3/generate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
+      resp = await r.json();
+    }
+
+    placeholder.response = resp;
+    placeholder.el.classList.remove("busy");
+    placeholder.el.title =
+      `${ENGINE_LABEL[engine]}: ${finalPrompt}\n` +
+      `complexity ${coords.x.toFixed(2)} · ${ENGINE_Y_RANGE[engine].label} ${knob.toFixed(2)}\n` +
+      `(shift-click to add to batch)`;
+    selectDot(id);
+    refreshMultiUi();
+    setStatus("ok", `${ENGINE_LABEL[engine]}: ready`);
+  } catch (err) {
+    showError(`Generate failed: ${err.message}`);
+    setStatus("err", "generate failed");
+    // Drop the failed dot.
+    placeholder.el.remove();
+    dots = dots.filter(d => d.id !== id);
+    refreshDotCount();
+  } finally {
+    busyDotEl = null;
+  }
+}
+
+// ─── Footer actions ────────────────────────────────────────────────────
+async function doResetState() {
+  clearError();
+  try {
+    await fetch(`${BACKEND}/reset`, { method: "POST" });
+    setStatus("ok", "magenta state reset");
+  } catch (e) { showError(`Reset failed: ${e.message}`); }
+}
+
+function doClearDots() {
+  dots.forEach(d => d.el.remove());
+  dots = [];
+  multiSelected.clear();
+  selectedDotId = null;
+  nextDotIdx = 0;
+  refreshDotCount();
+  refreshMultiUi();
+  $("preview").classList.add("empty");
+  $("preview-meta").textContent = "No clip yet — click on the pad to generate one.";
+  $("player").pause(); $("player").removeAttribute("src");
+  $("insert-btn").disabled = true;
+  $("regen-btn").disabled = true;
+}
+
+function doRegenerate() {
+  const d = dots.find(x => x.id === selectedDotId);
+  if (!d) return;
+  generateAtPoint({ x: d.x, y: d.y });
+}
+
+// AI x4: drop a dot at the centre of each quadrant of the pad and generate
+// each one sequentially. Quadrants:
+//   simple+chaotic (0.25, 0.25)   complex+chaotic (0.75, 0.25)
+//   simple+strict  (0.25, 0.75)   complex+strict  (0.75, 0.75)
+async function doRecommendations() {
+  clearError();
+  if (!$("prompt").value.trim()) {
+    showError("Enter a base prompt first — AI x4 needs something to riff on.");
+    return;
+  }
+  const points = [
+    { x: 0.25, y: 0.25 },
+    { x: 0.75, y: 0.25 },
+    { x: 0.25, y: 0.75 },
+    { x: 0.75, y: 0.75 },
+  ];
+  $("recommend-btn").disabled = true;
+  for (const p of points) {
+    try { await generateAtPoint(p); }
+    catch (_) { /* keep going to the next quadrant */ }
+  }
+  $("recommend-btn").disabled = false;
+}
+
+function packDotForInsert(d) {
+  return {
+    wavPath: d.response.wav_path,
+    engine: d.engine,
+    label:
+      `${ENGINE_LABEL[d.engine]} · cx${d.x.toFixed(2)}·${ENGINE_Y_RANGE[d.engine].label.slice(0,3)}${d.knob.toFixed(2)}`,
+  };
+}
+
+function doInsert() {
+  const d = dots.find(x => x.id === selectedDotId);
+  if (!d || !d.response) return;
+  try { $("player").pause(); } catch (_) {}
+  closeWithResult({
+    action: "insert",
+    engine: d.engine,
+    wavPath: d.response.wav_path,
+    items: [packDotForInsert(d)],
+    params: {
+      prompt: d.prompt,
+      complexity: d.x,
+      knob_value: d.knob,
+      knob_label: ENGINE_Y_RANGE[d.engine].label,
+    },
+  });
+}
+
+function doInsertMulti() {
+  const items = [];
+  for (const id of multiSelected) {
+    const d = dots.find(x => x.id === id);
+    if (d && d.response) items.push(packDotForInsert(d));
+  }
+  if (!items.length) return;
+  try { $("player").pause(); } catch (_) {}
+  closeWithResult({
+    action: "insert_multiple",
+    items,
+  });
+}
+
+function doCancel() {
+  try { $("player").pause(); } catch (_) {}
+  closeWithResult({ action: "cancel" });
+}
+
+$("reset-state-btn").addEventListener("click", doResetState);
+$("clear-dots-btn").addEventListener("click", doClearDots);
+$("recommend-btn").addEventListener("click", doRecommendations);
+$("regen-btn").addEventListener("click", doRegenerate);
+$("insert-btn").addEventListener("click", doInsert);
+$("insert-multi-btn").addEventListener("click", doInsertMulti);
+$("cancel-btn").addEventListener("click", doCancel);
+$("close-btn").addEventListener("click", doCancel);
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") doCancel();
+});
+
+document.addEventListener("DOMContentLoaded", () => {
+  $("prompt").focus();
+  syncReadoutPills();
+});
+</script>
+</body>
+</html>

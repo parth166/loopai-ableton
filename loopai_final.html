@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LoopAI — Ableton Loop Continuation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      background: #040407;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Syne', sans-serif;
+    }
+
+    .root {
+      width: 900px;
+      min-height: 640px;
+      background: #07070a;
+      background-image:
+        radial-gradient(ellipse 80% 40% at 20% 0%,  rgba(120,80,255,0.18) 0%, transparent 60%),
+        radial-gradient(ellipse 60% 50% at 90% 100%, rgba(200,240,96,0.08) 0%, transparent 55%),
+        radial-gradient(ellipse 50% 60% at 80%  10%, rgba(80,200,255,0.07) 0%, transparent 50%);
+      border-radius: 16px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      color: #e2e2e8;
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+
+    /* TOP BAR */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 28px;
+      border-bottom: 1px solid rgba(255,255,255,0.05);
+      background: rgba(255,255,255,0.02);
+      flex-shrink: 0;
+    }
+    .logo {
+      font-family: 'Syne', sans-serif;
+      font-size: 16px; font-weight: 800;
+      letter-spacing: 3px; text-transform: uppercase;
+      background: linear-gradient(90deg, #c8f060 0%, #80d4ff 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .conn {
+      display: flex; align-items: center; gap: 8px;
+      font-family: 'DM Mono', monospace;
+      font-size: 10px; color: #3a3a4a;
+      letter-spacing: 1px; text-transform: uppercase;
+    }
+    .live-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: #c8f060;
+      box-shadow: 0 0 7px rgba(200,240,96,0.6);
+      animation: blink 2s infinite;
+    }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.2} }
+
+    /* BODY SPLIT */
+    .body { display: flex; flex: 1; overflow: hidden; }
+
+    /* LEFT PANEL */
+    .left {
+      width: 272px; flex-shrink: 0;
+      border-right: 1px solid rgba(255,255,255,0.04);
+      padding: 24px 20px;
+      overflow-y: auto;
+      display: flex; flex-direction: column; gap: 22px;
+      background: rgba(0,0,0,0.2);
+    }
+
+    /* RIGHT PANEL */
+    .right {
+      flex: 1;
+      padding: 20px 20px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+
+    /* LABELS */
+    .lbl {
+      font-family: 'DM Mono', monospace;
+      font-size: 9px; letter-spacing: 2.5px;
+      text-transform: uppercase; color: #2e2e3e;
+      margin-bottom: 9px;
+    }
+
+    /* PILLS */
+    .pill-row { display: flex; gap: 6px; flex-wrap: wrap; }
+    .pill {
+      padding: 6px 13px; border-radius: 100px;
+      border: 1px solid rgba(255,255,255,0.07);
+      background: transparent; color: #444;
+      font-size: 11px; font-family: 'Syne', sans-serif; font-weight: 500;
+      cursor: pointer; transition: all .15s; user-select: none;
+    }
+    .pill:hover { border-color: rgba(255,255,255,0.16); color: #aaa; }
+    .pill.on {
+      border-color: rgba(200,240,96,0.5);
+      background: rgba(200,240,96,0.07);
+      color: #c8f060;
+    }
+
+    /* BUTTONS */
+    .btn-row { display: flex; gap: 9px; margin-top: auto; padding-top: 4px; }
+    .btn {
+      padding: 10px 16px; border-radius: 9px;
+      font-size: 12px; font-family: 'Syne', sans-serif; font-weight: 600;
+      cursor: pointer; border: 1px solid rgba(255,255,255,0.08);
+      background: transparent; color: #555; transition: all .15s;
+    }
+    .btn:hover { border-color: rgba(255,255,255,0.18); color: #ccc; }
+    .btn.go {
+      flex: 1;
+      background: linear-gradient(135deg, #c8f060 0%, #9ef040 100%);
+      color: #0a0f02; border-color: transparent; font-weight: 700;
+    }
+    .btn.go:hover { background: linear-gradient(135deg, #d4f470 0%, #aaff50 100%); }
+    .btn.go.loading { background: rgba(200,240,96,0.08); color: #c8f060; cursor: default; }
+
+    /* RIGHT HEADER */
+    .rh { display: flex; align-items: center; justify-content: space-between; }
+    .rh-title {
+      font-family: 'Syne', sans-serif; font-size: 10px;
+      font-weight: 700; letter-spacing: 2.5px;
+      text-transform: uppercase; color: #1e1e2a;
+    }
+
+    /* CANVAS WRAP */
+    .canvas-wrap {
+      position: relative; flex: 1; min-height: 280px;
+      display: flex; align-items: stretch;
+    }
+    .y-axis {
+      display: flex; flex-direction: column;
+      justify-content: space-between; align-items: flex-end;
+      padding: 6px 10px 24px 0; flex-shrink: 0;
+    }
+    .ya {
+      font-family: 'DM Mono', monospace; font-size: 8px;
+      letter-spacing: 1px; text-transform: uppercase;
+      color: #222; white-space: nowrap;
+    }
+
+    /* DOT CANVAS */
+    .canvas {
+      position: relative; flex: 1;
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 12px;
+      background:
+        radial-gradient(ellipse 70% 60% at 30% 30%, rgba(120,80,255,0.06) 0%, transparent 70%),
+        radial-gradient(ellipse 50% 40% at 75% 75%, rgba(200,240,96,0.04) 0%, transparent 60%),
+        #0a0a0e;
+      overflow: hidden;
+    }
+    .gl { position: absolute; background: rgba(255,255,255,0.025); }
+    .glh { width:100%; height:.5px; top:50%; left:0; }
+    .glv { height:100%; width:.5px; left:50%; top:0; }
+
+    .ax-bot { display: flex; justify-content: space-between; padding: 6px 2px 0; }
+    .ax {
+      font-family: 'DM Mono', monospace; font-size: 8px;
+      letter-spacing: 1px; text-transform: uppercase; color: #1c1c28;
+    }
+
+    /* EMPTY STATE */
+    .empty-state {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 13px;
+    }
+    .ering {
+      width: 54px; height: 54px; border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.05);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .etxt {
+      font-family: 'DM Mono', monospace; font-size: 9px;
+      color: #1c1c28; letter-spacing: 2px; text-transform: uppercase;
+    }
+
+    /* SPINNER */
+    .spinner {
+      width: 46px; height: 46px; border-radius: 50%;
+      border: 1.5px solid rgba(255,255,255,0.06);
+      border-top-color: #c8f060;
+      animation: spin .75s linear infinite;
+      position: absolute; top: 50%; left: 50%;
+      transform: translate(-50%,-50%);
+    }
+    @keyframes spin { to { transform: translate(-50%,-50%) rotate(360deg); } }
+    #spinner { display: none; }
+
+    /* ─────────────────────────────────────────────────
+       LOOP DOTS
+       Copy one of these divs to add a new dot manually.
+       Place inside <div id="dots">.
+       cx = left % (0=left, 100=right) → complexity axis
+       cy = top  % (0=top,  100=bottom) → temperature axis (0=hot, 100=cold)
+    ───────────────────────────────────────────────── */
+    .ldot {
+      position: absolute;
+      width: 44px; height: 44px;
+      border-radius: 50%;
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px;
+      font-family: 'DM Mono', monospace; font-weight: 500;
+      color: #07070a;
+      border: 1.5px solid transparent;
+      transform: translate(-50%,-50%);
+      transition: transform .15s, box-shadow .15s;
+      z-index: 2;
+    }
+    .ldot:hover { transform: translate(-50%,-50%) scale(1.2); }
+    .ldot.sel {
+      border-color: rgba(255,255,255,0.8);
+      box-shadow: 0 0 0 3px rgba(255,255,255,0.08), 0 0 20px rgba(255,255,255,0.05);
+      transform: translate(-50%,-50%) scale(1.14);
+    }
+
+    /* TOOLTIP */
+    .tip {
+      position: absolute;
+      background: rgba(10,10,16,0.95);
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 9px; padding: 10px 13px;
+      font-size: 11px; color: #ccc;
+      pointer-events: none; z-index: 10; min-width: 135px;
+      display: none;
+    }
+    .tip.show { display: block; }
+    .ttn { font-family:'Syne',sans-serif; font-weight:700; color:#fff; margin-bottom:5px; font-size:12px; }
+    .ttt {
+      display:inline-block; padding:2px 7px; border-radius:4px;
+      font-size:9px; margin:2px 2px 0 0;
+      background:rgba(255,255,255,0.05); color:#555;
+      font-family:'DM Mono',monospace;
+    }
+
+    /* SELECTED BAR */
+    .selbar {
+      background: rgba(255,255,255,0.02);
+      border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 10px; padding: 12px 15px;
+      display: flex; align-items: center; gap: 13px;
+      min-height: 54px; flex-shrink: 0;
+    }
+    .sw { width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0; }
+    .si { flex: 1; }
+    .sn { font-family:'Syne',sans-serif; font-size:13px; font-weight:600; color:#fff; margin-bottom:2px; }
+    .st { font-family:'DM Mono',monospace; font-size:9px; color:#333; letter-spacing:1px; }
+    .snone { font-family:'DM Mono',monospace; font-size:9px; color:#1e1e28; letter-spacing:1.5px; text-transform:uppercase; }
+    .pbtn {
+      width: 32px; height: 32px; border-radius: 50%;
+      border: 1px solid rgba(255,255,255,0.08);
+      background: transparent;
+      display: flex; align-items: center; justify-content: center;
+      cursor: pointer; color: #444; flex-shrink: 0; transition: all .15s;
+    }
+    .pbtn:hover { border-color: #c8f060; color: #c8f060; }
+    .pbtn.playing { border-color: #c8f060; background: rgba(200,240,96,0.1); color: #c8f060; }
+
+    /* DOWNLOAD ROW */
+    .dlrow { display: flex; gap: 8px; flex-wrap: wrap; flex-shrink: 0; }
+    .db {
+      padding: 9px 15px; border-radius: 8px;
+      font-size: 11px; font-family: 'Syne', sans-serif; font-weight: 600;
+      cursor: pointer; border: 1px solid rgba(255,255,255,0.07);
+      background: transparent; color: #444; transition: all .15s;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .db:hover { border-color: rgba(255,255,255,0.18); color: #ccc; }
+    .db.hi { border-color: rgba(200,240,96,0.35); color: #c8f060; background: rgba(200,240,96,0.05); }
+    .db.hi:hover { background: rgba(200,240,96,0.1); }
+    .db:disabled { opacity: .25; cursor: default; pointer-events: none; }
+
+    .left::-webkit-scrollbar { width: 3px; }
+    .left::-webkit-scrollbar-track { background: transparent; }
+    .left::-webkit-scrollbar-thumb { background: #1e1e28; border-radius: 2px; }
+  </style>
+</head>
+<body>
+
+<div class="root">
+
+  <div class="topbar">
+    <div class="logo">LoopAI</div>
+    <div class="conn">
+      <span class="live-dot"></span>
+      Ableton Live&nbsp;·&nbsp;Connected
+    </div>
+  </div>
+
+  <div class="body">
+
+    <!-- LEFT: FORM -->
+    <div class="left">
+
+      <div>
+        <div class="lbl">Song section</div>
+        <div class="pill-row" id="pg-part">
+          <div class="pill"    onclick="pick(this,'pg-part')">Intro</div>
+          <div class="pill on" onclick="pick(this,'pg-part')">Verse</div>
+          <div class="pill"    onclick="pick(this,'pg-part')">Pre-chorus</div>
+          <div class="pill"    onclick="pick(this,'pg-part')">Chorus</div>
+          <div class="pill"    onclick="pick(this,'pg-part')">Bridge</div>
+          <div class="pill"    onclick="pick(this,'pg-part')">Outro</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="lbl">Generate</div>
+        <div class="pill-row" id="pg-gen">
+          <div class="pill on" onclick="pick(this,'pg-gen')">What comes next</div>
+          <div class="pill"    onclick="pick(this,'pg-gen')">Replace section</div>
+          <div class="pill"    onclick="pick(this,'pg-gen')">Contrast / drop</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="lbl">Output length</div>
+        <div class="pill-row" id="pg-len">
+          <div class="pill"    onclick="pick(this,'pg-len')">4 bars</div>
+          <div class="pill on" onclick="pick(this,'pg-len')">8 bars</div>
+          <div class="pill"    onclick="pick(this,'pg-len')">16 bars</div>
+        </div>
+      </div>
+
+      <div>
+        <div class="lbl">Energy direction</div>
+        <div class="pill-row" id="pg-nrg">
+          <div class="pill"    onclick="pick(this,'pg-nrg')">Escalate</div>
+          <div class="pill on" onclick="pick(this,'pg-nrg')">Keep vibe</div>
+          <div class="pill"    onclick="pick(this,'pg-nrg')">Drop down</div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn" onclick="resetAll()">Reset</button>
+        <button class="btn go" id="gobtn" onclick="generate()">Generate →</button>
+      </div>
+
+    </div>
+
+    <!-- RIGHT: CANVAS -->
+    <div class="right">
+
+      <div class="rh">
+        <div class="rh-title">Exploration map</div>
+        <div style="font-family:'DM Mono',monospace;font-size:9px;color:#1c1c28;letter-spacing:1px;text-transform:uppercase;">
+          7 options · click to select
+        </div>
+      </div>
+
+      <div class="canvas-wrap">
+        <div class="y-axis">
+          <span class="ya" style="color:#2a2a3a;">high temp ↑</span>
+          <span class="ya" style="color:#1c1c28;font-size:7px;">temperature</span>
+          <span class="ya" style="color:#2a2a3a;">↓ low temp</span>
+        </div>
+        <div style="flex:1;display:flex;flex-direction:column;">
+          <div class="canvas" id="canvas">
+            <div class="gl glh"></div>
+            <div class="gl glv"></div>
+
+            <div class="empty-state" id="empty">
+              <div class="ering">
+                <i class="ti ti-wand" style="font-size:22px;color:#1e1e2a;" aria-hidden="true"></i>
+              </div>
+              <div class="etxt">Configure + generate</div>
+            </div>
+
+            <div id="spinner"><div class="spinner"></div></div>
+
+            <!--
+            ═══════════════════════════════════════════════════════
+            COPY-PASTE DOT EXAMPLES FOR YOUR ENGINEER
+            Drop these inside <div id="dots"> to add manual dots,
+            or let buildDots() generate them from the LOOPS array.
+
+            style="left: X%; top: Y%"
+              X% = complexity (0=simple / 100=complex)
+              Y% = temperature (0=hot / 100=cold)
+
+            background: radial-gradient(circle at 35% 35%, #COLOR, #COLORaa)
+              pick any hex color per loop
+
+            ── DOT EXAMPLE 1 — lime green, high temp, simple ──
+            <div class="ldot"
+                 style="left:20%;top:12%;background:radial-gradient(circle at 35% 35%,#c8f060ff,#c8f06088);">
+              A
+            </div>
+
+            ── DOT EXAMPLE 2 — blue, mid temp, complex ──
+            <div class="ldot"
+                 style="left:75%;top:48%;background:radial-gradient(circle at 35% 35%,#60c8f0ff,#60c8f088);">
+              B
+            </div>
+            ═══════════════════════════════════════════════════════
+            -->
+
+            <div id="dots"></div>
+            <div class="tip" id="tip"></div>
+          </div>
+
+          <div class="ax-bot">
+            <span class="ax">← simple</span>
+            <span class="ax" style="color:#1c1c28;">complexity</span>
+            <span class="ax">complex →</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="selbar" id="selbar">
+        <div class="snone">— select a loop from the map —</div>
+      </div>
+
+      <div class="dlrow">
+        <button class="db hi" id="b-midi"  disabled onclick="dlMidi()">
+          <i class="ti ti-download" style="font-size:13px;" aria-hidden="true"></i> MIDI
+        </button>
+        <button class="db hi" id="b-audio" disabled onclick="dlAudio()">
+          <i class="ti ti-download" style="font-size:13px;" aria-hidden="true"></i> Audio
+        </button>
+        <button class="db" onclick="regenerate()">
+          <i class="ti ti-refresh" style="font-size:13px;" aria-hidden="true"></i> Regenerate
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script>
+  /*
+  ═══════════════════════════════════════════════════════════════════
+  LOOP DATA ARRAY
+  Replace this with your real AI API response.
+  Each object needs:
+    id    — single letter label shown on the dot
+    name  — shown in the selected bar and tooltip
+    tags  — array of short descriptor strings for tooltip
+    color — hex color for the dot gradient
+    cx    — left % on canvas  (0=simple / 100=complex)
+    cy    — top  % on canvas  (0=hot    / 100=cold)
+  ═══════════════════════════════════════════════════════════════════
+  */
+  const LOOPS = [
+    { id:'A', name:'Dark escalation', tags:['+tension','modal shift'],  color:'#c8f060', cx:66, cy:15 },
+    { id:'B', name:'Rhythmic break',  tags:['syncopated','mid tempo'],  color:'#60c8f0', cx:28, cy:52 },
+    { id:'C', name:'Sparse drop',     tags:['stripped back','cool'],    color:'#b48aff', cx:14, cy:68 },
+    { id:'D', name:'Acid fill',       tags:['303 line','intense'],      color:'#ffaa44', cx:78, cy:22 },
+    { id:'E', name:'Melodic lift',    tags:['new motif','warm'],        color:'#44ffaa', cx:46, cy:36 },
+    { id:'F', name:'Poly rhythm',     tags:['4 vs 3','high energy'],    color:'#ff66aa', cx:84, cy:12 },
+    { id:'G', name:'Textural wash',   tags:['ambient','low temp'],      color:'#ffe566', cx:32, cy:80 },
+  ];
+
+  let sel = null, playing = false, generated = false;
+
+  function pick(el, g) {
+    document.querySelectorAll('#' + g + ' .pill').forEach(p => p.classList.remove('on'));
+    el.classList.add('on');
+  }
+
+  function resetAll() {
+    document.querySelectorAll('.pill-row').forEach(g => {
+      g.querySelectorAll('.pill').forEach((p, i) => p.classList.toggle('on', i === 0));
+    });
+  }
+
+  function generate() {
+    const btn = document.getElementById('gobtn');
+    if (btn.classList.contains('loading')) return;
+    btn.textContent = 'Generating...';
+    btn.classList.add('loading');
+    document.getElementById('empty').style.display = 'none';
+    document.getElementById('dots').innerHTML = '';
+    document.getElementById('spinner').style.display = 'block';
+    sel = null; playing = false; updateSel();
+    document.getElementById('b-midi').disabled  = true;
+    document.getElementById('b-audio').disabled = true;
+
+    /* TODO: swap setTimeout for your real API call.
+       On success call buildDots(yourData) and unlock buttons. */
+    setTimeout(() => {
+      document.getElementById('spinner').style.display = 'none';
+      buildDots(LOOPS);
+      generated = true;
+      btn.textContent = 'Regenerate →';
+      btn.classList.remove('loading');
+      document.getElementById('b-midi').disabled  = false;
+      document.getElementById('b-audio').disabled = false;
+    }, 2000);
+  }
+
+  function regenerate() {
+    if (!generated) { generate(); return; }
+    const btn = document.getElementById('gobtn');
+    btn.textContent = 'Generating...';
+    btn.classList.add('loading');
+    document.getElementById('dots').innerHTML = '';
+    document.getElementById('spinner').style.display = 'block';
+    sel = null; playing = false; updateSel();
+    setTimeout(() => {
+      document.getElementById('spinner').style.display = 'none';
+      buildDots(LOOPS);
+      btn.textContent = 'Regenerate →';
+      btn.classList.remove('loading');
+    }, 1600);
+  }
+
+  function buildDots(loops) {
+    const c = document.getElementById('dots');
+    c.innerHTML = '';
+    loops.forEach(l => {
+      const d = document.createElement('div');
+      d.className = 'ldot';
+      d.id = 'ld-' + l.id;
+      d.textContent = l.id;
+      d.style.left       = l.cx + '%';
+      d.style.top        = l.cy + '%';
+      d.style.background = `radial-gradient(circle at 35% 35%, ${l.color}ff, ${l.color}88)`;
+      d.addEventListener('mouseenter', () => showTip(l));
+      d.addEventListener('mouseleave', () => document.getElementById('tip').classList.remove('show'));
+      d.addEventListener('click',      () => selectLoop(l));
+      c.appendChild(d);
+    });
+  }
+
+  function showTip(l) {
+    const t   = document.getElementById('tip');
+    const cvs = document.getElementById('canvas').getBoundingClientRect();
+    const dr  = document.getElementById('ld-' + l.id).getBoundingClientRect();
+    t.innerHTML = `<div class="ttn">${l.name}</div>${l.tags.map(x => `<span class="ttt">${x}</span>`).join('')}`;
+    let x = dr.left - cvs.left + 28;
+    let y = dr.top  - cvs.top  - 12;
+    if (x + 152 > cvs.width) x = x - 170;
+    if (y < 0) y = y + 56;
+    t.style.left = x + 'px';
+    t.style.top  = y + 'px';
+    t.classList.add('show');
+  }
+
+  function selectLoop(l) {
+    sel = l; playing = false;
+    LOOPS.forEach(ld => document.getElementById('ld-' + ld.id)?.classList.toggle('sel', ld.id === l.id));
+    updateSel();
+  }
+
+  function updateSel() {
+    const sb = document.getElementById('selbar');
+    if (!sel) {
+      sb.innerHTML = '<div class="snone">— select a loop from the map —</div>';
+      return;
+    }
+    sb.innerHTML = `
+      <div class="sw" style="background:radial-gradient(circle at 35% 35%,${sel.color}ff,${sel.color}77);"></div>
+      <div class="si">
+        <div class="sn">${sel.name}</div>
+        <div class="st">${sel.tags.join(' · ')}</div>
+      </div>
+      <button class="pbtn" id="pbtn" onclick="togglePlay()" aria-label="Preview loop">
+        <i class="ti ti-player-play" style="font-size:13px;" aria-hidden="true"></i>
+      </button>`;
+  }
+
+  function togglePlay() {
+    playing = !playing;
+    const b = document.getElementById('pbtn');
+    if (b) {
+      b.classList.toggle('playing', playing);
+      b.innerHTML = playing
+        ? '<i class="ti ti-player-pause" style="font-size:13px;" aria-hidden="true"></i>'
+        : '<i class="ti ti-player-play"  style="font-size:13px;" aria-hidden="true"></i>';
+    }
+    /* TODO: connect to Tone.js / Web Audio API for real preview playback */
+  }
+
+  /* TODO: replace alerts with midi-writer-js export and Web Audio render */
+  function dlMidi()  { if (!sel) return; alert('Wire up MIDI export for: ' + sel.name); }
+  function dlAudio() { if (!sel) return; alert('Wire up audio render for: ' + sel.name); }
+</script>
+</body>
+</html>
