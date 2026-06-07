@@ -692,6 +692,21 @@ body[data-engine="sa3"]     .engine-pane.sa3     { display: flex; }
 
       <dt><code>duration</code></dt>
       <dd>Length of the generated clip in seconds. Longer = slower (linear cost).</dd>
+
+      <dt>Condition on selected clip</dt>
+      <dd>When you right-click an arrangement selection, the extension renders that
+        region to a WAV. This toggle hands the WAV to SA3 as
+        <code>init_audio</code> — the model uses your clip as the noisy starting
+        point of the diffusion. The output stays in your clip's harmonic and
+        timbral world while honoring the prompt. Default: ON whenever a clip was
+        rendered.</dd>
+
+      <dt><code>noise level</code></dt>
+      <dd>Only meaningful when <em>Condition on selected clip</em> is on.
+        <b>Low (0.05–0.4)</b>: barely changes your clip — small variations.
+        <b>Mid (0.5–0.8)</b>: keeps the vibe but lets the prompt drive new ideas.
+        <b>High (0.9–1.0)</b>: source clip is just a hint; SA3 is mostly text-driven.
+        Defaults to 0.8 (matches Stable Audio 3's upstream default).</dd>
     </dl>
 
     <h3>Buttons &amp; gestures</h3>
@@ -782,6 +797,26 @@ body[data-engine="sa3"]     .engine-pane.sa3     { display: flex; }
       <div class="label-row"><span>Diffusion steps</span><span class="value" id="sa3-steps-val">8</span></div>
       <input type="range" id="sa3-steps" min="4" max="100" step="1" value="8">
     </label>
+    <div class="field" id="sa3-init-row">
+      <label class="label-row" style="cursor:pointer;">
+        <span style="display:inline-flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="sa3-init-toggle">
+          <span>Condition on selected clip</span>
+        </span>
+        <span class="value" id="sa3-init-status">no clip available</span>
+      </label>
+      <div id="sa3-init-controls" style="display:none;">
+        <div class="label-row">
+          <span style="font-size:10.5px; color: var(--c-text-secondary);">noise level</span>
+          <span class="value"><span id="sa3-init-noise-val">0.80</span></span>
+        </div>
+        <input type="range" id="sa3-init-noise" min="0.05" max="1.00" step="0.05" value="0.80">
+        <div style="font-size:10px; color: var(--c-text-secondary); display:flex; justify-content:space-between; margin-top:2px;">
+          <span>← stays close to clip</span>
+          <span>more text-driven →</span>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- ─── 2D exploration pad ─── -->
@@ -1027,6 +1062,31 @@ function bindSlider(slider, valueEl, formatter) {
 bindSlider($("m-seconds"),    $("m-seconds-val"),    v => parseFloat(v).toFixed(1));
 bindSlider($("sa3-duration"), $("sa3-duration-val"), v => parseFloat(v).toFixed(1));
 bindSlider($("sa3-steps"),    $("sa3-steps-val"),    v => parseInt(v, 10));
+bindSlider($("sa3-init-noise"), $("sa3-init-noise-val"), v => parseFloat(v).toFixed(2));
+
+// ─── SA3 audio-to-audio toggle ───────────────────────────────────────
+// When the user opened the dialog from an audio selection that was
+// successfully rendered, default the toggle ON so SA3 anchors on it.
+const sa3InitToggle = $("sa3-init-toggle");
+const sa3InitControls = $("sa3-init-controls");
+const sa3InitStatus = $("sa3-init-status");
+function refreshSa3InitUi() {
+  const hasClip = !!audioConditioningPath;
+  sa3InitToggle.disabled = !hasClip;
+  if (!hasClip) {
+    sa3InitToggle.checked = false;
+    sa3InitStatus.textContent = "no clip available";
+  } else {
+    sa3InitStatus.textContent = sa3InitToggle.checked
+      ? "anchored on selection"
+      : "ignoring selection";
+  }
+  sa3InitControls.style.display = sa3InitToggle.checked && hasClip ? "" : "none";
+}
+sa3InitToggle.addEventListener("change", refreshSa3InitUi);
+// Default: ON whenever a clip was rendered.
+sa3InitToggle.checked = !!audioConditioningPath;
+refreshSa3InitUi();
 
 // ─── Preset chips fill the prompt ──────────────────────────────────────
 document.querySelectorAll(".preset-row button").forEach(b => {
@@ -1255,12 +1315,15 @@ async function generateAtPoint(coords, seedOverride) {
       if (!r.ok) throw new Error(`HTTP ${r.status}: ${await r.text()}`);
       resp = await r.json();
     } else {
+      const useInitAudio = sa3InitToggle.checked && !!audioConditioningPath;
       const body = {
         prompt: finalPrompt,
         duration: parseFloat($("sa3-duration").value),
         cfg_scale: knob,
         steps: parseInt($("sa3-steps").value, 10),
         seed,
+        init_audio_path: useInitAudio ? audioConditioningPath : null,
+        init_noise_level: parseFloat($("sa3-init-noise").value),
       };
       const r = await fetch(`${BACKEND}/sa3/generate`, {
         method: "POST",
@@ -1277,9 +1340,12 @@ async function generateAtPoint(coords, seedOverride) {
     if (typeof resp.seed === "number") placeholder.seed = resp.seed;
     placeholder.el.classList.remove("busy");
     const seedTitle = placeholder.seed >= 0 ? ` · seed ${placeholder.seed}` : "";
+    const initFrag = (engine === "sa3" && resp.init_audio)
+      ? ` · init-audio (noise ${(resp.init_noise_level ?? 0).toFixed(2)})`
+      : (engine === "magenta" && audioConditioningPath ? " · audio-conditioned" : "");
     placeholder.el.title =
       `${ENGINE_LABEL[engine]}: ${finalPrompt}\n` +
-      `complexity ${coords.x.toFixed(2)} · ${ENGINE_Y_RANGE[engine].label} ${knob.toFixed(2)}${seedTitle}\n` +
+      `complexity ${coords.x.toFixed(2)} · ${ENGINE_Y_RANGE[engine].label} ${knob.toFixed(2)}${seedTitle}${initFrag}\n` +
       `(shift-click to add to batch)`;
     selectDot(id);
     refreshMultiUi();

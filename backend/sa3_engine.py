@@ -126,6 +126,69 @@ class SA3Engine:
 
     # ─── Generation ─────────────────────────────────────────────────────
 
+    def _load_init_audio(self, path: str) -> tuple[int, "object"] | None:
+        """Load a WAV from disk and return (sample_rate, torch.Tensor) ready
+        for ``model.generate(init_audio=...)``.
+
+        - Resamples to the model's native sample rate so SA3 doesn't have
+          to handle rate conversion internally.
+        - Coerces to the model's channel count (mono <-> stereo as needed).
+        - Returns ``None`` and prints a warning if the file is missing or
+          unreadable; SA3 will then fall back to text-only.
+        """
+        if not path:
+            return None
+        try:
+            import torch
+            import torchaudio
+        except Exception as e:
+            print(f"[sa3] init_audio: torchaudio missing ({e})", flush=True)
+            return None
+
+        p = Path(path)
+        if not p.is_file():
+            print(f"[sa3] init_audio: file not found at {p}", flush=True)
+            return None
+
+        try:
+            waveform, src_sr = torchaudio.load(str(p))  # [channels, samples]
+        except Exception as e:
+            print(f"[sa3] init_audio: failed to read {p}: {e}", flush=True)
+            return None
+
+        target_sr = SA3_SAMPLE_RATE
+        if src_sr != target_sr:
+            try:
+                waveform = torchaudio.functional.resample(waveform, src_sr, target_sr)
+            except Exception as e:
+                print(
+                    f"[sa3] init_audio: resample {src_sr}->{target_sr} failed ({e}); "
+                    f"sending native rate",
+                    flush=True,
+                )
+                target_sr = src_sr
+
+        # Match the model's channel count (default stereo).
+        cfg = getattr(self._model, "model_config", {}) or {}
+        target_channels = int(cfg.get("io_channels", 2))
+        ch = waveform.shape[0]
+        if ch != target_channels:
+            if target_channels == 1:
+                waveform = waveform.mean(dim=0, keepdim=True)
+            elif target_channels == 2 and ch == 1:
+                waveform = waveform.repeat(2, 1)
+            else:
+                # Unexpected layout — let SA3 surface the error.
+                print(
+                    f"[sa3] init_audio: channel mismatch ({ch} -> {target_channels}); "
+                    f"forwarding as-is",
+                    flush=True,
+                )
+
+        # SA3's tests dtype-match to the model. Half-precision models accept
+        # float32 init audio (verified upstream), so we don't force a cast here.
+        return int(target_sr), waveform
+
     def _generate_blocking(
         self,
         prompt: str,
@@ -134,6 +197,8 @@ class SA3Engine:
         steps: int,
         seed: int,
         negative_prompt: str | None,
+        init_audio_path: str | None,
+        init_noise_level: float,
     ) -> tuple[np.ndarray, int, float]:
         """Returns (samples_channels_last_float32, sample_rate, elapsed_s)."""
         self._load_blocking()
@@ -151,6 +216,20 @@ class SA3Engine:
             kwargs["negative_prompt"] = negative_prompt
         if seed is not None and seed >= 0:
             kwargs["seed"] = int(seed)
+
+        init = self._load_init_audio(init_audio_path) if init_audio_path else None
+        if init is not None:
+            kwargs["init_audio"] = init
+            # Clamp to the (0,1] range the upstream API expects. 0 would
+            # just regurgitate the input, which is never useful here.
+            lvl = float(init_noise_level)
+            kwargs["init_noise_level"] = max(0.05, min(1.0, lvl))
+            sr_in, wav_in = init
+            print(
+                f"[sa3] init_audio: {Path(init_audio_path).name} "
+                f"sr={sr_in} shape={tuple(wav_in.shape)} noise={kwargs['init_noise_level']:.2f}",
+                flush=True,
+            )
 
         audio = self._model.generate(**kwargs)
         # `audio` shape is [batch, channels, samples]; we take batch[0],
@@ -175,6 +254,8 @@ class SA3Engine:
         steps: int = 8,
         seed: int = -1,
         negative_prompt: Optional[str] = None,
+        init_audio_path: Optional[str] = None,
+        init_noise_level: float = 0.8,
     ) -> tuple[np.ndarray, int, float]:
         if not self._available:
             raise RuntimeError(
@@ -191,6 +272,8 @@ class SA3Engine:
                 steps,
                 seed,
                 negative_prompt,
+                init_audio_path,
+                init_noise_level,
             )
         except Exception as e:
             print(

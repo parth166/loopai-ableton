@@ -90,12 +90,19 @@ class SA3GenerateRequest(BaseModel):
     cfg_scale: float = Field(DEFAULT_SA3_CFG_SCALE, ge=0.0, le=15.0)
     steps: int = Field(DEFAULT_SA3_STEPS, ge=1, le=200)
     seed: int = Field(-1, ge=-1)
+    # Optional path to a WAV the model should anchor on (Ableton selection).
+    # When set, SA3 runs in audio-to-audio mode (init_audio + init_noise_level).
+    init_audio_path: Optional[str] = None
+    # 0.05 → output stays close to the source; 1.0 → effectively text-only.
+    init_noise_level: float = Field(0.8, ge=0.0, le=1.0)
 
 
 class SA3GenerateResponse(GenerateResponse):
     cfg_scale: float
     steps: int
     seed: int
+    init_audio: bool = False
+    init_noise_level: Optional[float] = None
 
 
 class Backend:
@@ -518,6 +525,21 @@ def create_app(
                 "Stable Audio 3 not available: " + (sa3.import_error or "unknown error"),
             )
 
+        # If the dialog asked for audio-to-audio but the file isn't on disk,
+        # don't 500 — just fall back to text-only and tell the user.
+        init_path = req.init_audio_path
+        used_init = False
+        if init_path:
+            if Path(init_path).is_file():
+                used_init = True
+            else:
+                print(
+                    f"[sa3] init_audio_path missing on disk ({init_path}); "
+                    f"falling back to text-only",
+                    flush=True,
+                )
+                init_path = None
+
         try:
             samples, sr, elapsed = await sa3.generate_async(
                 req.prompt,
@@ -526,6 +548,8 @@ def create_app(
                 steps=req.steps,
                 seed=req.seed,
                 negative_prompt=req.negative_prompt,
+                init_audio_path=init_path,
+                init_noise_level=req.init_noise_level,
             )
         except Exception as e:
             raise HTTPException(500, f"sa3 generate failed: {e}") from e
@@ -543,6 +567,7 @@ def create_app(
         print(
             f"[sa3] generated {wav_path.name}  prompt={req.prompt!r}  "
             f"cfg={req.cfg_scale} steps={req.steps} "
+            f"init_audio={used_init} (noise={req.init_noise_level if used_init else '-'}) "
             f"{duration_ms}ms  elapsed={elapsed:.2f}s ({rt_ratio:.2f}x rt)",
             flush=True,
         )
@@ -556,6 +581,8 @@ def create_app(
             cfg_scale=req.cfg_scale,
             steps=req.steps,
             seed=req.seed,
+            init_audio=used_init,
+            init_noise_level=req.init_noise_level if used_init else None,
         )
 
     return app
