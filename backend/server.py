@@ -61,6 +61,9 @@ class GenerateRequest(BaseModel):
     # When set, Magenta conditions on this WAV file instead of (or blended
     # with) the text prompt.  Path must exist on the local filesystem.
     audio_path: Optional[str] = None
+    # Deterministic-mode seed for the demo. -1 means "use whatever the
+    # ambient RNG state is" (i.e. ordinary stochastic generation).
+    seed: int = Field(-1, ge=-1)
 
 
 class GenerateResponse(BaseModel):
@@ -70,6 +73,7 @@ class GenerateResponse(BaseModel):
     duration_ms: int
     elapsed_s: float
     realtime_ratio: float
+    seed: int = -1
 
 
 class SA3GenerateRequest(BaseModel):
@@ -227,8 +231,22 @@ class Backend:
         self, req: GenerateRequest
     ) -> tuple[np.ndarray, int, float]:
         with self._lock:
-            if req.reset_state:
+            # When the user pins a seed, we want full reproducibility:
+            #   - reset autoregressive state so prior calls don't bleed in,
+            #   - reseed every RNG MLX/NumPy might draw from for sampling.
+            # Without this, even matching prompt+seed would diverge after
+            # the first call.
+            seed_pinned = req.seed is not None and req.seed >= 0
+            if seed_pinned or req.reset_state:
                 self._state = None
+            if seed_pinned:
+                np.random.seed(int(req.seed))
+                if not self.dry_run:
+                    try:
+                        import mlx.core as mx
+                        mx.random.seed(int(req.seed))
+                    except Exception as e:  # MLX missing in dry-run / test envs
+                        print(f"[backend] seed: mlx unavailable ({e})", flush=True)
 
             t0 = time.time()
             if self.dry_run:
@@ -469,6 +487,7 @@ def create_app(
             duration_ms=duration_ms,
             elapsed_s=round(elapsed, 3),
             realtime_ratio=round(rt_ratio, 3),
+            seed=req.seed,
         )
 
     @app.get("/audio/{name}")

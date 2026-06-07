@@ -590,6 +590,57 @@ button.btn.accent2:disabled {
 .engine-pane { display: none; flex-direction: column; gap: 10px; }
 body[data-engine="magenta"] .engine-pane.magenta { display: flex; }
 body[data-engine="sa3"]     .engine-pane.sa3     { display: flex; }
+
+.seed-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 10px;
+  background: var(--c-input-bg);
+  border: 1px solid var(--c-control-border);
+  border-radius: 8px;
+  font-size: 11px;
+}
+.seed-row.pinned {
+  border-color: var(--c-accent2);
+  background: linear-gradient(0deg, rgba(80,255,200,0.05), rgba(80,255,200,0.05)), var(--c-input-bg);
+}
+.seed-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  color: var(--c-text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+.seed-pin input { cursor: pointer; }
+.seed-row input[type="number"] {
+  width: 110px;
+  background: var(--c-bg);
+  border: 1px solid var(--c-control-border);
+  border-radius: 6px;
+  color: var(--c-text-primary);
+  padding: 4px 8px;
+  font: 600 11.5px ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-variant-numeric: tabular-nums;
+}
+.seed-row input[type="number"]:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.seed-dice {
+  padding: 3px 9px !important;
+  font-size: 13px !important;
+  line-height: 1;
+}
+.seed-hint {
+  flex: 1;
+  font-size: 10.5px;
+  color: var(--c-text-secondary);
+  text-align: right;
+}
+.seed-row.pinned .seed-hint { color: var(--c-accent2); }
 </style>
 </head>
 <body>
@@ -664,6 +715,14 @@ body[data-engine="sa3"]     .engine-pane.sa3     { display: flex; }
 
       <dt>Clear Map</dt>
       <dd>Removes every dot from the pad and forgets the multi-select batch.</dd>
+
+      <dt>Pin seed</dt>
+      <dd>Switches the model into deterministic mode. With the pin on, the same
+        prompt + same pad coordinate + same seed reproduces the same audio every
+        run — useful for demos. The dice button rolls a fresh random seed.
+        <b>AI x4</b> uses <code>seed, seed+1, seed+2, seed+3</code> when pinned, so the
+        four quadrants stay distinct but reproducible together. Each finished
+        dot's tooltip shows the seed it was generated with.</dd>
     </dl>
 
     <h3>Project context (Stable Audio 3)</h3>
@@ -696,6 +755,16 @@ body[data-engine="sa3"]     .engine-pane.sa3     { display: flex; }
       <button data-preset="jazz piano trio, walking bass, brushed drums, swing">jazz</button>
     </div>
   </label>
+
+  <div class="seed-row" id="seed-row">
+    <label class="seed-pin">
+      <input type="checkbox" id="seed-pin">
+      <span>Pin seed</span>
+    </label>
+    <input type="number" id="seed-value" min="0" max="2147483647" step="1" value="42" disabled>
+    <button class="btn seed-dice" id="seed-dice" type="button" title="Randomize seed">&#x1F3B2;</button>
+    <span class="seed-hint" id="seed-hint">unpinned &mdash; each generate uses a fresh random seed</span>
+  </div>
 
   <!-- Engine-specific knobs (duration, fixed model params) -->
   <div class="engine-pane magenta">
@@ -1107,15 +1176,27 @@ function selectDot(id) {
   player.src = url;
   player.load();
   $("preview").classList.remove("empty");
+  const seedFrag = d.seed >= 0 ? ` · seed ${d.seed}` : "";
   $("preview-meta").textContent =
     `${ENGINE_LABEL[d.engine]} · ${(d.response.duration_ms/1000).toFixed(1)}s · ` +
-    `complex ${d.x.toFixed(2)} · ${ENGINE_Y_RANGE[d.engine].label} ${d.knob.toFixed(2)} · ` +
+    `complex ${d.x.toFixed(2)} · ${ENGINE_Y_RANGE[d.engine].label} ${d.knob.toFixed(2)}${seedFrag} · ` +
     `${d.response.elapsed_s.toFixed(2)}s wall`;
   $("insert-btn").disabled = false;
   $("regen-btn").disabled = false;
 }
 
-async function generateAtPoint(coords) {
+// Seed resolution. When the "Pin seed" checkbox is on we send the user's
+// seed value verbatim; otherwise we send -1, which the backend interprets
+// as "ordinary stochastic generation". `seedOverride` lets AI x4 fan out
+// distinct-but-reproducible seeds (seed, seed+1, seed+2, seed+3).
+function seedFor(seedOverride) {
+  if (typeof seedOverride === "number" && seedOverride >= 0) return seedOverride;
+  if (!$("seed-pin").checked) return -1;
+  const v = parseInt($("seed-value").value, 10);
+  return Number.isFinite(v) && v >= 0 ? v : -1;
+}
+
+async function generateAtPoint(coords, seedOverride) {
   clearError();
   const base = $("prompt").value.trim();
   if (!base) { showError("Enter a base prompt first."); return; }
@@ -1134,18 +1215,20 @@ async function generateAtPoint(coords) {
   const finalPrompt = engine === "sa3"
     ? baseMutated + songConstraintSuffix()
     : baseMutated;
+  const seed = seedFor(seedOverride);
   const id = "d" + Date.now() + "_" + Math.floor(Math.random() * 1000);
   const color = colorFor(engine, dots.length);
 
   // Place a busy dot immediately so the user gets visual feedback.
-  const placeholder = { id, engine, x: coords.x, y: coords.y, knob, prompt: finalPrompt, response: null, color, el: null, ts: Date.now() };
+  const placeholder = { id, engine, x: coords.x, y: coords.y, knob, prompt: finalPrompt, seed, response: null, color, el: null, ts: Date.now() };
   placeholder.el = makeDotElement(placeholder);
   placeholder.el.classList.add("busy");
   dotsLayer.appendChild(placeholder.el);
   dots.push(placeholder);
   busyDotEl = placeholder.el;
   refreshDotCount();
-  setStatus("busy", `${ENGINE_LABEL[engine]}: generating...`);
+  const seedTag = seed >= 0 ? ` seed=${seed}` : "";
+  setStatus("busy", `${ENGINE_LABEL[engine]}: generating${seedTag}...`);
   $("regen-btn").disabled = true;
 
   try {
@@ -1157,8 +1240,12 @@ async function generateAtPoint(coords) {
         temperature: knob,
         top_k: 40,
         cfg_musiccoca: 4.0,
-        reset_state: false,
+        // Pinning a seed implies "I want a deterministic take" — force a
+        // reset so the autoregressive memory from previous calls doesn't
+        // leak into this one. (Backend also resets when seed >= 0.)
+        reset_state: seed >= 0,
         audio_path: audioConditioningPath || null,
+        seed,
       };
       const r = await fetch(`${BACKEND}/generate`, {
         method: "POST",
@@ -1173,7 +1260,7 @@ async function generateAtPoint(coords) {
         duration: parseFloat($("sa3-duration").value),
         cfg_scale: knob,
         steps: parseInt($("sa3-steps").value, 10),
-        seed: -1,
+        seed,
       };
       const r = await fetch(`${BACKEND}/sa3/generate`, {
         method: "POST",
@@ -1185,14 +1272,18 @@ async function generateAtPoint(coords) {
     }
 
     placeholder.response = resp;
+    // Backend echoes the actual seed used; if it ever differs (e.g. -1
+    // means "ambient RNG"), we fall back to what we sent.
+    if (typeof resp.seed === "number") placeholder.seed = resp.seed;
     placeholder.el.classList.remove("busy");
+    const seedTitle = placeholder.seed >= 0 ? ` · seed ${placeholder.seed}` : "";
     placeholder.el.title =
       `${ENGINE_LABEL[engine]}: ${finalPrompt}\n` +
-      `complexity ${coords.x.toFixed(2)} · ${ENGINE_Y_RANGE[engine].label} ${knob.toFixed(2)}\n` +
+      `complexity ${coords.x.toFixed(2)} · ${ENGINE_Y_RANGE[engine].label} ${knob.toFixed(2)}${seedTitle}\n` +
       `(shift-click to add to batch)`;
     selectDot(id);
     refreshMultiUi();
-    setStatus("ok", `${ENGINE_LABEL[engine]}: ready`);
+    setStatus("ok", `${ENGINE_LABEL[engine]}: ready${seedTitle}`);
   } catch (err) {
     showError(`Generate failed: ${err.message}`);
     setStatus("err", "generate failed");
@@ -1232,7 +1323,10 @@ function doClearDots() {
 function doRegenerate() {
   const d = dots.find(x => x.id === selectedDotId);
   if (!d) return;
-  generateAtPoint({ x: d.x, y: d.y });
+  // If the user has pin enabled, re-running on the same dot should be
+  // bit-identical: pass the previously-used seed back in.
+  const override = ($("seed-pin").checked && d.seed >= 0) ? d.seed : undefined;
+  generateAtPoint({ x: d.x, y: d.y }, override);
 }
 
 // AI x4: drop a dot at the centre of each quadrant of the pad and generate
@@ -1251,9 +1345,16 @@ async function doRecommendations() {
     { x: 0.25, y: 0.75 },
     { x: 0.75, y: 0.75 },
   ];
+  // When the seed is pinned, fan out distinct-but-reproducible seeds so
+  // the four quadrants don't collapse into the same audio: seed,
+  // seed+1, seed+2, seed+3. Same prompt + same pin value will always
+  // produce the same four takes.
+  const pinned = $("seed-pin").checked;
+  const baseSeed = pinned ? seedFor() : -1;
   $("recommend-btn").disabled = true;
-  for (const p of points) {
-    try { await generateAtPoint(p); }
+  for (let i = 0; i < points.length; i++) {
+    const override = pinned && baseSeed >= 0 ? baseSeed + i : undefined;
+    try { await generateAtPoint(points[i], override); }
     catch (_) { /* keep going to the next quadrant */ }
   }
   $("recommend-btn").disabled = false;
@@ -1313,6 +1414,37 @@ $("insert-btn").addEventListener("click", doInsert);
 $("insert-multi-btn").addEventListener("click", doInsertMulti);
 $("cancel-btn").addEventListener("click", doCancel);
 $("close-btn").addEventListener("click", doCancel);
+
+// ─── Seed pinning (deterministic mode for demos) ─────────────────────
+const seedPinEl = $("seed-pin");
+const seedValueEl = $("seed-value");
+const seedRowEl = $("seed-row");
+const seedHintEl = $("seed-hint");
+
+function refreshSeedUi() {
+  const pinned = seedPinEl.checked;
+  seedRowEl.classList.toggle("pinned", pinned);
+  seedValueEl.disabled = !pinned;
+  seedHintEl.textContent = pinned
+    ? `pinned — same prompt + click reproduces the same audio`
+    : `unpinned — each generate uses a fresh random seed`;
+}
+seedPinEl.addEventListener("change", refreshSeedUi);
+$("seed-dice").addEventListener("click", () => {
+  // 31-bit positive int — fits comfortably in both Python int range and
+  // the number input's max we set in markup.
+  seedValueEl.value = Math.floor(Math.random() * 0x7fffffff);
+  if (!seedPinEl.checked) {
+    seedPinEl.checked = true;
+    refreshSeedUi();
+  }
+});
+seedValueEl.addEventListener("input", () => {
+  // Keep the input non-negative.
+  const v = parseInt(seedValueEl.value, 10);
+  if (!Number.isFinite(v) || v < 0) seedValueEl.value = "0";
+});
+refreshSeedUi();
 
 // ─── Help overlay ────────────────────────────────────────────────────
 const helpOverlay = $("help-overlay");
