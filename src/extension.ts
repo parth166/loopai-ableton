@@ -8,7 +8,7 @@ import {
 
 import dialogHtml from "./dialog.html";
 
-const DIALOG_WIDTH = 720;
+const DIALOG_WIDTH = 820;
 const DIALOG_HEIGHT = 760;
 
 const COMMAND_GENERATE_FROM_SELECTION = "trackSelection.generate";

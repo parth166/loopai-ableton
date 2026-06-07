@@ -89,7 +89,8 @@ body {
 .status.busy .dot { background: var(--c-accent); animation: pulse 1s ease-in-out infinite; }
 @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
-.close-btn {
+.close-btn,
+.help-btn {
   background: transparent;
   border: 1px solid var(--c-control-border);
   color: var(--c-text-secondary);
@@ -103,9 +104,91 @@ body {
   font-weight: 700;
   line-height: 1;
 }
-.close-btn:hover {
+.close-btn:hover,
+.help-btn:hover {
   color: var(--c-text-primary);
   border-color: var(--c-text-secondary);
+}
+.help-btn.open {
+  background: var(--c-accent);
+  border-color: var(--c-accent);
+  color: #1a1a1a;
+}
+
+.help-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.55);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+  padding: 24px;
+}
+.help-overlay.show { display: flex; }
+.help-card {
+  background: var(--c-bg);
+  border: 1px solid var(--c-control-border);
+  border-radius: 12px;
+  padding: 18px 20px 16px;
+  max-width: 560px;
+  width: 100%;
+  max-height: calc(100% - 48px);
+  overflow: auto;
+  box-shadow: 0 18px 40px rgba(0,0,0,0.45);
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--c-text-primary);
+}
+.help-card h2 {
+  font-size: 15px;
+  font-weight: 700;
+  margin-bottom: 4px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.help-card h2 .tag {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--c-text-secondary);
+}
+.help-card h3 {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  color: var(--c-text-secondary);
+  margin: 14px 0 4px;
+}
+.help-card dl {
+  display: grid;
+  grid-template-columns: 130px 1fr;
+  column-gap: 14px;
+  row-gap: 6px;
+  margin: 0;
+}
+.help-card dt {
+  font-weight: 700;
+  color: var(--c-text-primary);
+}
+.help-card dt code {
+  font-size: 11px;
+  background: var(--c-input-bg);
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--c-accent2);
+}
+.help-card dd {
+  margin: 0;
+  color: var(--c-text-secondary);
+}
+.help-card .help-foot {
+  margin-top: 14px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .engine-tabs {
@@ -253,21 +336,22 @@ input[type="range"]::-webkit-slider-thumb {
 
 .pad-wrap {
   display: grid;
-  grid-template-columns: 22px 1fr;
+  grid-template-columns: 56px 1fr;
   grid-template-rows: 1fr 22px;
-  gap: 4px;
+  gap: 6px;
 }
 .pad-y {
   display: flex;
   flex-direction: column;
   justify-content: space-between;
   align-items: flex-end;
-  padding: 4px 0;
+  padding: 4px 6px 4px 0;
   font-size: 9px;
   letter-spacing: 0.6px;
   text-transform: uppercase;
   color: var(--c-text-secondary);
   white-space: nowrap;
+  overflow: visible;
 }
 .pad {
   position: relative;
@@ -516,7 +600,85 @@ body[data-engine="sa3"]     .engine-pane.sa3     { display: flex; }
     <button id="tab-sa3" data-engine="sa3" title="Stable Audio 3">Stable Audio 3</button>
   </div>
   <div id="status" class="status"><span class="dot"></span><span id="status-text">connecting...</span></div>
+  <button class="help-btn" id="help-btn" title="What do these controls mean?" aria-label="Help">?</button>
   <button class="close-btn" id="close-btn" title="Close (Esc)">×</button>
+</div>
+
+<div class="help-overlay" id="help-overlay" aria-hidden="true">
+  <div class="help-card" role="dialog" aria-labelledby="help-title">
+    <h2 id="help-title">Quick reference <span class="tag">click anywhere to dismiss</span></h2>
+    <p style="color: var(--c-text-secondary); margin-top: 6px;">
+      The pad is a 2-D <em>exploration map</em>. Click anywhere to generate a clip at that
+      coordinate; each click leaves a dot you can audition and insert.
+    </p>
+
+    <h3>Pad axes</h3>
+    <dl>
+      <dt>X · simple ↔ complex</dt>
+      <dd>Rewrites your prompt before sending it. Left prepends qualifiers like
+        <em>minimal, sparse</em>; right appends <em>layered, polyrhythmic, dense arrangement</em>.
+        The dead-center 6% sends the prompt verbatim so you can A/B against the modifiers.</dd>
+
+      <dt>Y · chaotic ↔ strict</dt>
+      <dd>Sweeps the engine's "creativity" knob. Top of pad = looser, more surprising;
+        bottom = tighter, more faithful to the prompt.</dd>
+
+      <dt><code>temperature</code></dt>
+      <dd><b>Magenta only.</b> Top of pad = 1.6 (chaotic), bottom = 0.5 (strict). Higher temperature
+        widens the sampling distribution, so the model picks rarer continuations.</dd>
+
+      <dt><code>cfg_scale</code></dt>
+      <dd><b>Stable Audio 3 only.</b> Top of pad = 0.5 (creative), bottom = 5.0 (strict).
+        How hard the diffusion process is "pushed" toward your prompt — higher = obeys the
+        text more literally but can sound rigid.</dd>
+    </dl>
+
+    <h3>Stable Audio 3 controls</h3>
+    <dl>
+      <dt><code>diffusion steps</code></dt>
+      <dd>How many denoising passes the model runs. More steps = cleaner, more detailed
+        audio but slower. 30–50 is fast preview quality; 80–120 is final-render quality.</dd>
+
+      <dt><code>duration</code></dt>
+      <dd>Length of the generated clip in seconds. Longer = slower (linear cost).</dd>
+    </dl>
+
+    <h3>Buttons &amp; gestures</h3>
+    <dl>
+      <dt>AI x4</dt>
+      <dd>Drops one dot at the centre of each quadrant
+        (simple+chaotic, complex+chaotic, simple+strict, complex+strict) and runs them in
+        sequence. One-click survey of the prompt's space.</dd>
+
+      <dt>Shift-click dot</dt>
+      <dd>Adds the dot to a multi-select batch (teal ring). Click <b>Insert N selected</b>
+        to splice all of them in as separate new audio tracks.</dd>
+
+      <dt>Insert into New Track</dt>
+      <dd>Creates a fresh audio track in Live next to the source and drops the previewed
+        clip on it. Your original track is never overwritten.</dd>
+
+      <dt>Reset State</dt>
+      <dd><b>Magenta only.</b> Clears the model's autoregressive memory between takes.
+        Use it when generations start drifting toward the same loop.</dd>
+
+      <dt>Clear Map</dt>
+      <dd>Removes every dot from the pad and forgets the multi-select batch.</dd>
+    </dl>
+
+    <h3>Project context (Stable Audio 3)</h3>
+    <p style="color: var(--c-text-secondary); margin-top: 4px;">
+      The chips above the pad show your Live set's BPM and key (read from
+      <code>Song.tempo</code> / <code>Song.rootNote</code> / <code>Song.scaleName</code>).
+      For SA3, those values are auto-appended to the prompt as
+      <em>"&hellip;, 120 BPM, in C Minor; do not change tempo or key"</em>.
+      Hover any finished dot to see the exact prompt that was sent.
+    </p>
+
+    <div class="help-foot">
+      <button class="btn primary" id="help-close-btn">Got it</button>
+    </div>
+  </div>
 </div>
 
 <div class="scroll" id="scroll">
@@ -1151,6 +1313,27 @@ $("insert-btn").addEventListener("click", doInsert);
 $("insert-multi-btn").addEventListener("click", doInsertMulti);
 $("cancel-btn").addEventListener("click", doCancel);
 $("close-btn").addEventListener("click", doCancel);
+
+// ─── Help overlay ────────────────────────────────────────────────────
+const helpOverlay = $("help-overlay");
+const helpBtn = $("help-btn");
+function setHelp(open) {
+  helpOverlay.classList.toggle("show", open);
+  helpOverlay.setAttribute("aria-hidden", open ? "false" : "true");
+  helpBtn.classList.toggle("open", open);
+}
+helpBtn.addEventListener("click", () => setHelp(!helpOverlay.classList.contains("show")));
+$("help-close-btn").addEventListener("click", () => setHelp(false));
+helpOverlay.addEventListener("click", (e) => {
+  // Click outside the card (i.e. on the dimmed backdrop) dismisses.
+  if (e.target === helpOverlay) setHelp(false);
+});
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && helpOverlay.classList.contains("show")) {
+    e.stopPropagation();
+    setHelp(false);
+  }
+});
 
 document.addEventListener("keydown", (e) => {
   if (e.key === "Escape") doCancel();
