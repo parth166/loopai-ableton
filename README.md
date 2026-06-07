@@ -1,4 +1,4 @@
-# LoopAI for Ableton
+# Unfold
 
 An Ableton Live 12 extension that drops AI-generated audio clips straight into
 your arrangement from a 2-D **exploration map**. Each click on the map fires
@@ -115,7 +115,7 @@ hackathon/                                  ← any directory you like
 ### 1. Clone & install the extension
 
 ```bash
-git clone https://github.com/parth166/loopai-ableton.git track-selection
+git clone https://github.com/parth166/unfold.git track-selection
 cd track-selection
 cp .env.example .env       # then edit EXTENSION_HOST_PATH if your Live install is elsewhere
 npm install
